@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(onClick = onNavigateToCheckbox) {
-                    Text("Budynek")
+                    Text("Budynek1")
                 }
                 Button(onClick = { /*TODO*/ }) {
                     Text("Button 2")
