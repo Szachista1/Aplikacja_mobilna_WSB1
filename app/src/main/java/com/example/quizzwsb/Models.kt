@@ -1,21 +1,22 @@
 package com.example.quizzwsb
 
-// Model dla odpowiedzi, pasujący do serwera: { id, text, isCorrect }
+// Model dla odpowiedzi
 data class Answer(
     val id: Int,
     val text: String,
     val isCorrect: Boolean
 )
 
-// Model dla pytania, pasujący do serwera: { id, question, category, answers: [...] }
+// Model dla pytania, zawiera teraz również categoryId
 data class Question(
     val id: Int,
     val question: String,
+    val categoryId: Int,
     val category: String,
     val answers: List<Answer>
 )
 
-// Model dla kategorii, pasujący do serwera: { id, name }
+// Model dla kategorii
 data class Category(
     val id: Int,
     val name: String

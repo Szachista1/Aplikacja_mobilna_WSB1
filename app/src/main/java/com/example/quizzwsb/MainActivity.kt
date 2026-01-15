@@ -4,13 +4,21 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,6 +28,9 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+
+// Klasa przechowująca pytanie i odpowiedź użytkownika
+data class UserAnswerRecord(val question: Question, val selectedAnswer: Answer)
 
 class MainActivity : ComponentActivity() {
 
@@ -44,30 +55,49 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation(apiService: ApiService) {
+    var currentScreen by remember { mutableStateOf("category_selection") }
     var selectedCategory by remember { mutableStateOf<Category?>(null) }
+    var userResults by remember { mutableStateOf<List<UserAnswerRecord>?>(null) }
 
-    if (selectedCategory == null) {
-        CategorySelectionScreen(apiService = apiService, onCategorySelected = { category ->
-            selectedCategory = category
-        })
-    } else {
-        QuizScreen(apiService = apiService, category = selectedCategory!!, onNavigateBack = {
-            selectedCategory = null
-        })
+    when (currentScreen) {
+        "category_selection" -> CategorySelectionScreen(
+            apiService = apiService,
+            onCategorySelected = { category ->
+                selectedCategory = category
+                currentScreen = "quiz"
+            }
+        )
+        "quiz" -> QuizScreen(
+            apiService = apiService,
+            category = selectedCategory!!,
+            onQuizFinished = { results ->
+                userResults = results
+                currentScreen = "results"
+            },
+            onNavigateBack = {  // Dodajemy nawigację powrotną
+                currentScreen = "category_selection"
+            }
+        )
+        "results" -> ResultsScreen(
+            results = userResults!!,
+            onFinish = {
+                selectedCategory = null
+                userResults = null
+                currentScreen = "category_selection"
+            }
+        )
     }
 }
 
 @Composable
 fun CategorySelectionScreen(apiService: ApiService, onCategorySelected: (Category) -> Unit) {
+    // ... (bez zmian)
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         try {
             categories = apiService.getCategories()
-        } catch (e: Exception) {
-            errorMessage = e.localizedMessage ?: "Błąd połączenia"
         } finally {
             isLoading = false
         }
@@ -75,22 +105,14 @@ fun CategorySelectionScreen(apiService: ApiService, onCategorySelected: (Categor
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Wybierz kategorię quizu", style = MaterialTheme.typography.displaySmall)
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator()
-        } else if (errorMessage != null) {
-            Text("Błąd: $errorMessage", color = Color.Red)
-        } else {
+        Image(painter = painterResource(id = R.drawable.pobrane), contentDescription = "Logo", modifier = Modifier.padding(vertical = 32.dp).height(80.dp))
+        Text("Wybierz kategorię quizu", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(24.dp))
+        if (isLoading) CircularProgressIndicator() else {
             categories.forEach { category ->
-                Button(
-                    onClick = { onCategorySelected(category) },
-                    modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(0.8f).height(50.dp)
-                ) {
+                Button(onClick = { onCategorySelected(category) }, modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(0.8f)) {
                     Text(category.name, fontSize = 18.sp)
                 }
             }
@@ -99,37 +121,49 @@ fun CategorySelectionScreen(apiService: ApiService, onCategorySelected: (Categor
 }
 
 @Composable
-fun QuizScreen(apiService: ApiService, category: Category, onNavigateBack: () -> Unit) {
+fun QuizScreen(apiService: ApiService, category: Category, onQuizFinished: (List<UserAnswerRecord>) -> Unit, onNavigateBack: () -> Unit) {
     var questions by remember { mutableStateOf<List<Question>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentQuestionIndex by remember { mutableStateOf(0) }
-    var score by remember { mutableStateOf(0) }
     var selectedAnswer by remember { mutableStateOf<Answer?>(null) }
+    val userAnswers = remember { mutableStateListOf<UserAnswerRecord>() }
 
     LaunchedEffect(category) {
         isLoading = true
         try {
-            questions = apiService.getQuestions().filter { it.category == category.name }
+            questions = apiService.getQuestions().filter { it.categoryId == category.id }
         } finally {
             isLoading = false
         }
     }
 
     if (isLoading) {
-        // Ekran ładowania pytań
-    } else if (questions.isNotEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+            Text("Ładowanie pytań...", modifier = Modifier.padding(top = 64.dp))
+        }
+    } else if (questions.isEmpty()) {
+        // Ten blok wyświetli się, gdy nie ma pytań
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Brak pytań w tej kategorii", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onNavigateBack) {
+                    Text("Wróć")
+                }
+            }
+        }
+    } else {
+        // Ten blok wykona się tylko, jeśli są pytania
         if (currentQuestionIndex < questions.size) {
             val question = questions[currentQuestionIndex]
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                Text("Kategoria: ${category.name} | Pytanie ${currentQuestionIndex + 1}/${questions.size}")
+                Text("Pytanie ${currentQuestionIndex + 1}/${questions.size}")
                 Text(question.question, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(24.dp))
 
                 question.answers.forEach { answer ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { selectedAnswer = answer }.padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth().clickable { selectedAnswer = answer }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = selectedAnswer?.id == answer.id, onClick = { selectedAnswer = answer })
                         Text(answer.text, fontSize = 18.sp, modifier = Modifier.padding(start = 8.dp))
                     }
@@ -139,25 +173,78 @@ fun QuizScreen(apiService: ApiService, category: Category, onNavigateBack: () ->
 
                 Button(
                     onClick = {
-                        if (selectedAnswer?.isCorrect == true) score++
-                        currentQuestionIndex++
-                        selectedAnswer = null
+                        selectedAnswer?.let { userAnswer ->
+                            userAnswers.add(UserAnswerRecord(question, userAnswer))
+                            if (currentQuestionIndex < questions.size - 1) {
+                                currentQuestionIndex++
+                                selectedAnswer = null
+                            } else {
+                                onQuizFinished(userAnswers)
+                            }
+                        }
                     },
                     enabled = selectedAnswer != null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Dalej")
+                    Text(if (currentQuestionIndex < questions.size - 1) "Dalej" else "Zakończ i zobacz wyniki")
                 }
             }
         } else {
-            // Ekran wyników
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-                Text("Koniec Quizu!", style = MaterialTheme.typography.displaySmall)
-                Text("Wynik: $score z ${questions.size}", style = MaterialTheme.typography.headlineMedium)
-                Button(onClick = onNavigateBack) { Text("Wybierz inną kategorię") }
-            }
+             ResultsScreen(results = userAnswers, onFinish = onNavigateBack)
         }
-    } else {
-        // Ekran na wypadek braku pytań w kategorii
     }
 }
+
+@Composable
+fun ResultsScreen(results: List<UserAnswerRecord>, onFinish: () -> Unit) {
+    // ... (bez zmian)
+     val correctAnswersCount = results.count { it.selectedAnswer.isCorrect }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Podsumowanie", style = MaterialTheme.typography.displaySmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Twój wynik: $correctAnswersCount z ${results.size}", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(results) { record ->
+                val question = record.question
+                val selected = record.selectedAnswer
+                val correctAnswer = question.answers.first { it.isCorrect }
+
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(question.question, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        question.answers.forEach { answer ->
+                            val isSelected = answer.id == selected.id
+                            val isCorrect = answer.isCorrect
+
+                            val (icon, color) = when {
+                                isCorrect -> Icons.Default.Check to Color.Green.copy(alpha = 0.2f)
+                                isSelected -> Icons.Default.Close to Color.Red.copy(alpha = 0.2f)
+                                else -> null to Color.Transparent
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().background(color).padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (icon != null) {
+                                    Icon(imageVector = icon, contentDescription = null, tint = if (isCorrect) Color.DarkGray else Color.Red)
+                                }
+                                Text(answer.text, modifier = Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text("Wróć do wyboru kategorii")
+        }
+    }
+}
+
