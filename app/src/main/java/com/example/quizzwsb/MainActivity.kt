@@ -140,9 +140,21 @@ fun QuizScreen(
     }
 
     if (isLoading) {
-        // ... ekran ładowania
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
     } else if (questions.isEmpty()) {
-        // ... ekran braku pytań
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Brak pytań w tej kategorii.", style = MaterialTheme.typography.headlineSmall)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onNavigateBack) {
+                Text("Wróć")
+            }
+        }
     } else {
         if (currentQuestionIndex < questions.size) {
             val question = questions[currentQuestionIndex]
