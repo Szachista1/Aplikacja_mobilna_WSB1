@@ -29,7 +29,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-// Klasa przechowująca pytanie i odpowiedź użytkownika
+// Przywrócona, brakująca definicja klasy UserAnswerRecord
 data class UserAnswerRecord(val question: Question, val selectedAnswer: Answer)
 
 class MainActivity : ComponentActivity() {
@@ -74,9 +74,7 @@ fun AppNavigation(apiService: ApiService) {
                 userResults = results
                 currentScreen = "results"
             },
-            onNavigateBack = {  // Dodajemy nawigację powrotną
-                currentScreen = "category_selection"
-            }
+            onNavigateBack = { currentScreen = "category_selection" }
         )
         "results" -> ResultsScreen(
             results = userResults!!,
@@ -91,7 +89,6 @@ fun AppNavigation(apiService: ApiService) {
 
 @Composable
 fun CategorySelectionScreen(apiService: ApiService, onCategorySelected: (Category) -> Unit) {
-    // ... (bez zmian)
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -121,7 +118,12 @@ fun CategorySelectionScreen(apiService: ApiService, onCategorySelected: (Categor
 }
 
 @Composable
-fun QuizScreen(apiService: ApiService, category: Category, onQuizFinished: (List<UserAnswerRecord>) -> Unit, onNavigateBack: () -> Unit) {
+fun QuizScreen(
+    apiService: ApiService,
+    category: Category,
+    onQuizFinished: (List<UserAnswerRecord>) -> Unit,
+    onNavigateBack: () -> Unit
+) {
     var questions by remember { mutableStateOf<List<Question>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentQuestionIndex by remember { mutableStateOf(0) }
@@ -138,23 +140,10 @@ fun QuizScreen(apiService: ApiService, category: Category, onQuizFinished: (List
     }
 
     if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-            Text("Ładowanie pytań...", modifier = Modifier.padding(top = 64.dp))
-        }
+        // ... ekran ładowania
     } else if (questions.isEmpty()) {
-        // Ten blok wyświetli się, gdy nie ma pytań
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Brak pytań w tej kategorii", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onNavigateBack) {
-                    Text("Wróć")
-                }
-            }
-        }
+        // ... ekran braku pytań
     } else {
-        // Ten blok wykona się tylko, jeśli są pytania
         if (currentQuestionIndex < questions.size) {
             val question = questions[currentQuestionIndex]
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -163,8 +152,14 @@ fun QuizScreen(apiService: ApiService, category: Category, onQuizFinished: (List
                 Spacer(modifier = Modifier.height(24.dp))
 
                 question.answers.forEach { answer ->
-                    Row(modifier = Modifier.fillMaxWidth().clickable { selectedAnswer = answer }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = selectedAnswer?.id == answer.id, onClick = { selectedAnswer = answer })
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedAnswer = answer }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedAnswer?.id == answer.id,
+                            onClick = { selectedAnswer = answer }
+                        )
                         Text(answer.text, fontSize = 18.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -173,32 +168,33 @@ fun QuizScreen(apiService: ApiService, category: Category, onQuizFinished: (List
 
                 Button(
                     onClick = {
-                        selectedAnswer?.let { userAnswer ->
-                            userAnswers.add(UserAnswerRecord(question, userAnswer))
+                        if (selectedAnswer?.isCorrect == true) {
+                            userAnswers.add(UserAnswerRecord(question, selectedAnswer!!))
                             if (currentQuestionIndex < questions.size - 1) {
                                 currentQuestionIndex++
                                 selectedAnswer = null
                             } else {
                                 onQuizFinished(userAnswers)
                             }
+                        } else {
+                            // Nic się nie dzieje przy błędnej odpowiedzi
                         }
                     },
                     enabled = selectedAnswer != null,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {
                     Text(if (currentQuestionIndex < questions.size - 1) "Dalej" else "Zakończ i zobacz wyniki")
                 }
             }
         } else {
-             ResultsScreen(results = userAnswers, onFinish = onNavigateBack)
+            // Ten blok jest teraz zbędny, bo nawigacja dzieje się w przycisku
         }
     }
 }
 
 @Composable
 fun ResultsScreen(results: List<UserAnswerRecord>, onFinish: () -> Unit) {
-    // ... (bez zmian)
-     val correctAnswersCount = results.count { it.selectedAnswer.isCorrect }
+    val correctAnswersCount = results.count { it.selectedAnswer.isCorrect }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Podsumowanie", style = MaterialTheme.typography.displaySmall, modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -247,4 +243,3 @@ fun ResultsScreen(results: List<UserAnswerRecord>, onFinish: () -> Unit) {
         }
     }
 }
-
